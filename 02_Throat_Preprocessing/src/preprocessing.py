@@ -1,0 +1,284 @@
+import os
+import cv2
+from pathlib import Path
+import numpy as np
+
+TARGET_SIZE = (256, 256)
+
+
+def compute_symmetry_iou(mask_patch):
+    """
+    Computes normalized bilateral IoU (Jaccard Index) across the vertical centerline.
+    """
+    h, w = mask_patch.shape[:2]
+    mid = w // 2
+    left_half = mask_patch[:, :mid]
+    right_half = mask_patch[:, mid:]
+    min_w = min(left_half.shape[1], right_half.shape[1])
+    if min_w <= 0 or h <= 0:
+        return 0.0
+    left_flipped = cv2.flip(left_half[:, :min_w], 1)
+    right_trimmed = right_half[:, :min_w]
+    overlap = cv2.countNonZero(cv2.bitwise_and(left_flipped, right_trimmed))
+    union = cv2.countNonZero(cv2.bitwise_or(left_flipped, right_trimmed))
+    return overlap / union if union > 0 else 0.0
+
+
+def score_chin_north(crop_mask):
+    """
+    Calculates a multi-feature anatomical morphology score to determine whether
+    the chin is oriented North (+ score) or South (- score).
+
+    Combines 4 invariant biological cues:
+    1. Longitudinal Width Taper: Chin apex (top 25%) is narrower than chest base (bottom 25%).
+    2. Top Corner Void Margins: Parabolic chin arch leaves large empty triangular top corners.
+    3. Bilateral Area Mass: Belly mass is distributed towards the lower torso.
+    4. Vertical Moments: Evaluates center of mass relative to geometric center.
+    """
+    h, w = crop_mask.shape[:2]
+    if h < 5 or w < 5:
+        return 0.0
+
+    # 1. Longitudinal Width Gradient
+    h_25 = max(1, int(h * 0.25))
+    w_top = np.mean([np.count_nonzero(crop_mask[r, :]) for r in range(h_25)])
+    w_bot = np.mean([np.count_nonzero(crop_mask[h - 1 - r, :]) for r in range(h_25)])
+    s_width = (w_bot - w_top) / (w_bot + w_top + 1e-5)
+
+    # 2. Corner Void Space Difference
+    w_corner = max(1, w // 3)
+    top_corner_void = (h_25 * w_corner * 2) - (
+        np.count_nonzero(crop_mask[:h_25, :w_corner]) + np.count_nonzero(crop_mask[:h_25, -w_corner:])
+    )
+    bot_corner_void = (h_25 * w_corner * 2) - (
+        np.count_nonzero(crop_mask[-h_25:, :w_corner]) + np.count_nonzero(crop_mask[-h_25:, -w_corner:])
+    )
+    s_corner = (top_corner_void - bot_corner_void) / (top_corner_void + bot_corner_void + 1e-5)
+
+    # 3. Area Mass Distribution
+    top_area = np.count_nonzero(crop_mask[:h // 2, :])
+    bot_area = np.count_nonzero(crop_mask[h // 2:, :])
+    s_area = (bot_area - top_area) / (top_area + bot_area + 1e-5)
+
+    # 4. Vertical Moments (Center of Mass)
+    M = cv2.moments(crop_mask)
+    s_moment = ((M['m01'] / M['m00']) - (h / 2.0)) / (h / 2.0) if M['m00'] > 0 else 0.0
+
+    return 3.5 * s_width + 2.5 * s_corner + 2.0 * s_area + 1.5 * s_moment
+
+
+def align_chin_to_yaxis(img):
+    """
+    Aligns the throat patch vertically along the Y-axis and ensures
+    the chin points strictly North (upwards).
+    """
+    if img is None:
+        return None, 0, False
+
+    if img.ndim == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img.copy()
+
+    _, mask = cv2.threshold(gray, 2, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return img, 0, False
+
+    largest_contour = max(contours, key=cv2.contourArea)
+    clean_mask = np.zeros_like(mask)
+    cv2.drawContours(clean_mask, [largest_contour], -1, 255, cv2.FILLED)
+
+    h, w = img.shape[:2]
+    pad = max(h, w)
+    padded_mask = cv2.copyMakeBorder(clean_mask, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    padded_img = cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    cy, cx = padded_mask.shape[0] // 2, padded_mask.shape[1] // 2
+
+    # 1. Full 180° Projective Symmetry Sweep (Coarse in 2° steps)
+    best_angle = 0
+    best_obj = -1e9
+
+    for angle in range(0, 180, 2):
+        M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+        rot_mask = cv2.warpAffine(padded_mask, M, (padded_mask.shape[1], padded_mask.shape[0]))
+        x, y, bw, bh = cv2.boundingRect(rot_mask)
+        if bw <= 1 or bh <= 1:
+            continue
+        crop_m = rot_mask[y:y + bh, x:x + bw]
+        iou = compute_symmetry_iou(crop_m)
+        if iou > best_obj:
+            best_obj = iou
+            best_angle = angle
+
+    # 2. Fine-Tuning Sweep (±3° in 0.5° steps)
+    fine_angle = best_angle
+    best_fine_obj = -1e9
+    for angle in np.arange(best_angle - 3.0, best_angle + 3.5, 0.5):
+        M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+        rot_mask = cv2.warpAffine(padded_mask, M, (padded_mask.shape[1], padded_mask.shape[0]))
+        x, y, bw, bh = cv2.boundingRect(rot_mask)
+        if bw <= 1 or bh <= 1:
+            continue
+        crop_m = rot_mask[y:y + bh, x:x + bw]
+        iou = compute_symmetry_iou(crop_m)
+        if iou > best_fine_obj:
+            best_fine_obj = iou
+            fine_angle = angle
+
+    M_final = cv2.getRotationMatrix2D((cx, cy), fine_angle, 1.0)
+    aligned_img = cv2.warpAffine(
+        padded_img, M_final, (padded_img.shape[1], padded_img.shape[0]),
+        flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=0
+    )
+    aligned_mask = cv2.warpAffine(
+        padded_mask, M_final, (padded_mask.shape[1], padded_mask.shape[0]),
+        borderMode=cv2.BORDER_CONSTANT, borderValue=0
+    )
+
+    x, y, bw, bh = cv2.boundingRect(aligned_mask)
+    if bw <= 0 or bh <= 0:
+        return img, fine_angle, False
+
+    crop_mask = aligned_mask[y:y + bh, x:x + bw]
+    crop_img = aligned_img[y:y + bh, x:x + bw]
+
+    # 3. Anatomical Upright Check (Chin to North)
+    score = score_chin_north(crop_mask)
+    flipped = False
+    if score < 0:
+        crop_img = cv2.rotate(crop_img, cv2.ROTATE_180)
+        crop_mask = cv2.rotate(crop_mask, cv2.ROTATE_180)
+        flipped = True
+
+    return crop_img, crop_mask, fine_angle, flipped
+
+
+def enhance_and_sharpen_gray(img_gray, mask, clip_limit=4.0, tile_grid_size=(8, 8)):
+    """
+    Enhances contrast and sharpens single-channel Grayscale images:
+    1. Edge-preserving bilateral filtering to suppress sensor noise without blurring spot edges.
+    2. Adaptive local contrast enhancement via CLAHE.
+    3. Multi-scale Unsharp Masking detail boost.
+    4. Pure black [0] background enforcement.
+    """
+    # 1. Edge-preserving bilateral denoising
+    denoised = cv2.bilateralFilter(img_gray, d=5, sigmaColor=40, sigmaSpace=40)
+
+    # 2. CLAHE local contrast enhancement
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+    clahe_enhanced = clahe.apply(denoised)
+
+    # 3. Multi-scale Unsharp Masking detail boost
+    blur = cv2.GaussianBlur(clahe_enhanced, (0, 0), sigmaX=1.5)
+    detail = clahe_enhanced.astype(np.float32) - blur.astype(np.float32)
+    sharp = np.clip(clahe_enhanced.astype(np.float32) + 2.0 * detail, 0, 255).astype(np.uint8)
+
+    # 4. Strict pure black background enforcement
+    sharp[mask == 0] = 0
+    return sharp
+
+
+def preprocess_throat_gray(img, target_size=TARGET_SIZE, clip_limit=4.0):
+    """
+    Complete Grayscale Preprocessing Pipeline:
+    1. Upright chin-to-North alignment (Symmetry sweep + Anatomical scorer)
+    2. Lanczos-4 high-fidelity resizing to target size (256x256)
+    3. Bilateral denoising + CLAHE + Unsharp Masking
+    4. Pure black background enforcement
+    """
+    if img is None:
+        return None
+
+    aligned_img, aligned_mask, _, _ = align_chin_to_yaxis(img)
+
+    if aligned_img.ndim == 3:
+        aligned_gray = cv2.cvtColor(aligned_img, cv2.COLOR_BGR2GRAY)
+    else:
+        aligned_gray = aligned_img.copy()
+
+    # Lanczos-4 resizing
+    resized_gray = cv2.resize(aligned_gray, target_size, interpolation=cv2.INTER_LANCZOS4)
+    resized_mask = cv2.resize(aligned_mask, target_size, interpolation=cv2.INTER_NEAREST)
+
+    final_gray = enhance_and_sharpen_gray(resized_gray, resized_mask, clip_limit=clip_limit)
+    return final_gray
+
+
+def process_dataset(input_dir, output_dir, target_size=TARGET_SIZE, clip_limit=4.0):
+    """Processes all images in input_dir and saves data grayscale images to output_dir."""
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    supported_exts = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp')
+    image_files = sorted([
+        f for f in os.listdir(input_path)
+        if Path(f).suffix.lower() in supported_exts and not f.startswith('.')
+    ])
+
+    print(f"\n{'='*70}")
+    print(f"🚀 Starting Grayscale Preprocessing Pipeline (Upright Chin-North + Sharp USM)")
+    print(f"📂 Input Directory:  {input_path}")
+    print(f"📁 Output Directory: {output_path}")
+    print(f"🖼️ Found {len(image_files)} images to process (Target: {target_size}, Color: Grayscale)")
+    print(f"{'='*70}\n")
+
+    processed_count = 0
+    flipped_count = 0
+    angles_adjusted = []
+
+    for img_name in image_files:
+        img_path = input_path / img_name
+        img = cv2.imread(str(img_path))
+
+        if img is None:
+            print(f"⚠️ Warning: Could not read {img_name}. Skipping...")
+            continue
+
+        aligned_img, aligned_mask, angle, flipped = align_chin_to_yaxis(img)
+        if flipped:
+            flipped_count += 1
+        angles_adjusted.append(angle)
+
+        if aligned_img.ndim == 3:
+            aligned_gray = cv2.cvtColor(aligned_img, cv2.COLOR_BGR2GRAY)
+        else:
+            aligned_gray = aligned_img.copy()
+
+        resized_gray = cv2.resize(aligned_gray, target_size, interpolation=cv2.INTER_LANCZOS4)
+        resized_mask = cv2.resize(aligned_mask, target_size, interpolation=cv2.INTER_NEAREST)
+
+        final_gray = enhance_and_sharpen_gray(resized_gray, resized_mask, clip_limit=clip_limit)
+
+        save_path = output_path / img_name
+        cv2.imwrite(str(save_path), final_gray)
+        processed_count += 1
+
+    print(f"\n{'='*70}")
+    print(f"✅ Grayscale Preprocessing Complete!")
+    print(f"   • Total Images Processed: {processed_count} / {len(image_files)}")
+    print(f"   • Chin Orientation Flipped to North: {flipped_count} ({flipped_count/max(processed_count,1)*100:.1f}%)")
+    if angles_adjusted:
+        print(f"   • Tilt Correction: Min={min(angles_adjusted)}°, Max={max(angles_adjusted)}°, Mean={np.mean(angles_adjusted):.1f}°")
+    print(f"   • Saved to: {output_path.resolve()}")
+    print(f"{'='*70}\n")
+
+
+if __name__ == '__main__':
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent.parent
+
+    base_input = project_root / '02_Throat_Preprocessing' / 'data' / 'SAM2_Data'
+    base_output = project_root / '03_2_Siamese_network' / 'data' / 'gray'
+
+    splits = ['train', 'val']
+    for split in splits:
+        in_folder = base_input / split
+        out_folder = base_output / split
+
+        if in_folder.exists():
+            print(f"\n--- Processing Grayscale [{split.upper()}] Dataset ---")
+            process_dataset(in_folder, out_folder)
+        else:
+            print(f"⚠️ Input folder does not exist: {in_folder}")

@@ -1,0 +1,40 @@
+# Python & Virtual Environments
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS / Editor Files
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+
+# Large Model Checkpoints & Large Files
+*.pt
+*.pth
+*.onnx
+sam2_t.pt
+*.pdf
+*.xlsx
+*.csv
+
+# Datasets & Heavy Image Data Directories (Anywhere in repo)
+**/data/
+**/data/**
+data/
+throat_belly/
+
+# Project Context & Agent Internal Docs
+context.md
+GEMINI.md
+.agents/
+docs/
+
+# Archived Experimental Data & Temp Tests
+unused/
+temp_test/
+
+# Heavy Intermediate Evaluation Visualizations
+results/sam2_polygon_evaluation/visualizations/
+results/yolo_val_overlap/individual/

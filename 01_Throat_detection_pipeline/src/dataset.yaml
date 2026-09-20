@@ -1,0 +1,12 @@
+# dataset.yaml
+
+# 1. The relative path from this YAML file up to your main data folder
+path: ../data 
+
+# 2. The exact names of the folders for training and grading
+train: train
+val: val
+
+# 3. Your Class ID map
+names:
+  0: toad

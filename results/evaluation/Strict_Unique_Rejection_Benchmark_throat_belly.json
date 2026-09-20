@@ -1,0 +1,33 @@
+{
+  "dataset_summary": {
+    "source_directory": "03_2_Siamese_network/data/unique_toads/rgb_throat_belly_unique",
+    "total_unique_toads": 60,
+    "ground_truth_property": "All 60 images belong to mutually disjoint unique toad identities."
+  },
+  "five_unique_toad_metrics": {
+    "Siamese_ConvNeXt_RGB_Throat_Belly": {
+      "metric_1_rejection_specificity_tnr": 66.66666666666666,
+      "metric_2_false_merge_rate_far": 33.33333333333333,
+      "metric_3_discovered_clusters": 40,
+      "metric_3_ideal_clusters": 60,
+      "metric_4_mu_impostor": 0.7169623970985413,
+      "metric_4_median_impostor": 0.7143638134002686,
+      "metric_4_worst_case_impostor": 0.9287286400794983,
+      "metric_5_safe_zero_fp_threshold": 0.9288286400794983,
+      "operating_threshold": 0.7,
+      "runtime_seconds": 1.7882990837097168
+    },
+    "BiModel_Consensus": {
+      "metric_1_rejection_specificity_tnr": 96.66666666666667,
+      "metric_2_false_merge_rate_far": 3.3333333333333335,
+      "metric_3_discovered_clusters": 58,
+      "metric_3_ideal_clusters": 60,
+      "metric_4_mu_impostor": 0.03926020488142967,
+      "metric_4_median_impostor": 0.03534769266843796,
+      "metric_4_worst_case_impostor": 0.13407906889915466,
+      "metric_5_safe_zero_fp_threshold": 0.13417906889915465,
+      "operating_threshold": 0.06,
+      "runtime_seconds": 18.52048683166504
+    }
+  }
+}
