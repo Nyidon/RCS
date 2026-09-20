@@ -9,9 +9,8 @@ TARGET_SIZE = (256, 256)
 
 
 def compute_symmetry_iou(mask_patch):
-    """
-    Computes normalized bilateral IoU (Jaccard Index) across the vertical centerline.
-    """
+
+    # Computes normalized bilateral IoU (Jaccard Index) across the vertical centerline.
     h, w = mask_patch.shape[:2]
     mid = w // 2
     left_half = mask_patch[:, :mid]
@@ -27,16 +26,7 @@ def compute_symmetry_iou(mask_patch):
 
 
 def score_chin_north(crop_mask):
-    """
-    Calculates a multi-feature anatomical morphology score to determine whether
-    the chin is oriented North (+ score) or South (- score).
 
-    Combines 4 invariant biological cues:
-    1. Longitudinal Width Taper: Chin apex (top 25%) is narrower than chest base (bottom 25%).
-    2. Top Corner Void Margins: Parabolic chin arch leaves large empty triangular top corners.
-    3. Bilateral Area Mass: Belly mass is distributed towards the lower torso.
-    4. Vertical Moments: Evaluates center of mass relative to geometric center.
-    """
     h, w = crop_mask.shape[:2]
     if h < 5 or w < 5:
         return 0.0
@@ -70,10 +60,7 @@ def score_chin_north(crop_mask):
 
 
 def align_chin_to_yaxis_rgb(img):
-    """
-    Aligns the toad throat patch vertically along the Y-axis and ensures
-    the chin points strictly North (upwards).
-    """
+
     if img is None:
         return None, None, 0, False
 
@@ -157,14 +144,7 @@ def align_chin_to_yaxis_rgb(img):
 
 
 def enhance_and_sharpen_rgb(img_bgr, mask, clip_limit=3.0, tile_grid_size=(8, 8)):
-    """
-    Enhances contrast and sharpens 3-channel RGB/BGR images:
-    1. Converts to LAB color space to isolate Lightness (L) from color (a, b).
-    2. Edge-preserving bilateral filtering on L channel to suppress sensor grain and reflections.
-    3. Contrast-Limited Adaptive Histogram Equalization (CLAHE) on L channel.
-    4. Multi-scale Unsharp Masking (USM) detail boost on L channel.
-    5. Pure black [0, 0, 0] background enforcement.
-    """
+
     lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
 

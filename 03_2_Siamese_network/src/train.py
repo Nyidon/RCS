@@ -12,7 +12,6 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 
-# Add project root and local src to path
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent
 sys.path.append(str(current_dir))
@@ -91,7 +90,7 @@ def train_siamese_network(
     print(f"   - {len(clusters)} unique Toad IDs ({total_multi_toads} multi-sighting, {len(clusters) - total_multi_toads} singletons)")
     print(f"   - {total_images_in_clusters} total images assigned to identity clusters.")
 
-    # Stratified 80/20 train/val split
+    # Stratified train/val split
     multi_ids = [k for k, imgs in clusters.items() if len(imgs) >= 2]
     single_ids = [k for k, imgs in clusters.items() if len(imgs) == 1]
     

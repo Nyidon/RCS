@@ -1,16 +1,6 @@
-"""
-preprocessing.py (Throat + Belly Pipeline)
-==========================================
-Phase 2: Geometric Standardisation and Photometric Enhancement for Throat+Belly crops.
 
-Pipeline Steps:
-1. Multi-Scale Bilateral Symmetry Sweep (0° to 180° at 0.5° fine resolution).
-2. Anatomical Orientation Scorer (Ensures chin is strictly North, pelvis South).
-3. Aspect-Preserving Letterbox Pad to 256x256 with pure black border.
-4. LAB Bilateral Filter + CLAHE Contrast Enhancement.
-5. High-Pass Scalpel Sharpening (Unsharp Masking).
-6. Saves standardized RGB crops to data/preprocessed/{train, val}/.
-"""
+# preprocessing.py (Throat + Belly Pipeline)
+
 
 import os
 import cv2

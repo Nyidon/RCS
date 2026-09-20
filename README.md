@@ -1,10 +1,5 @@
 # RCS: Automated Toad Biometric Re-Identification Pipeline
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg)](https://pytorch.org/)
-[![Ultralytics](https://img.shields.io/badge/YOLOv8%20%2F%20SAM2-Computer%20Vision-green.svg)](https://docs.ultralytics.com/)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
-
 An automated computer vision and deep biometric metric learning framework for individual amphibian re-identification (*Bufo bufo* / *Bombina variegata*) in ecological Capture-Mark-Recapture (CMR / RCS) surveys. The system identifies individual toads across temporal field survey sessions using the natural, unique pigmentation spot patterns located on their subgular throat and full ventral skin regions.
 
 ---
@@ -45,10 +40,17 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
                                ▼
 ┌────────────────────────────────────────────────────────┐
 │         Automated Evaluation & Benchmarks              │
-│  1. Recapture Identification (100 Images, 40 IDs)      │
-│  2. False Merge Prevention (60 Unique Individuals)     │
-│  3. Anatomical Comparison: Throat vs. Throat + Belly   │
+│  SAM2 performance                                      │
+│  RBG Vs Grayscaled data                                │
+│  On Throat alone across different models:              │
+│    1. Recapture Identification (100 Images, 40 IDs)    │
+│    2. False Merge Prevention (60 Unique Individuals)   │
+│  Anatomical Comparison of Throat vs. Throat + Belly:   │
+│     Bi-Model Consensus Vs Deep Metric Net              │
+│    1. Recapture Identification (100 Images, 40 IDs)    │
+│    2. False Merge Prevention (60 Unique Individuals)   │
 └────────────────────────────────────────────────────────┘
+                            
 ```
 
 ---
@@ -64,9 +66,6 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 * **4-Feature Anatomical Orientation Scorer**: Eliminates $180^\circ$ upside-down ambiguity using longitudinal width gradient, corner voids, area mass distribution, and center-of-mass moments.
 * **Photometric Enhancement**: LAB color-space bilateral filtering, CLAHE ($L$-channel), and unsharp detail enhancement to highlight subtle carotenoid pigments and melanin spots against specular glare.
 
-> **Note on Throat + Belly Pipeline (`01-02_Throat_Belly_pipeline/`)**:  
-> The `01-02_Throat_Belly_pipeline/` directory is an end-to-end unified stage executing YOLOv8 detection, SAM 2 segmentation, and bilateral standardization directly on the full ventral region (Throat + Belly combined) rather than the throat alone.
-
 ### Phase 3.1: Bi-Model Deterministic Consensus (`03_1_Bi_model_consensus/`)
 * **Complementary Descriptors**: Fuses **SIFT** (128-d gradient histograms) and **AKAZE** (binary MLDB) with boundary mask erosion (13 px).
 * **Spatial Verification**: 2-NN Lowe's Ratio Test ($\tau = 0.80$) and 2D Affine RANSAC geometric consensus filtering.
@@ -76,33 +75,72 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 * **Backbone Architecture**: `convnext_tiny` pre-trained on wildlife representations with an $L_2$-normalized 256-d projection head.
 * **Loss & Optimization**: Batch-Hard Triplet Mining ($P=8, K=4$) with Cosine Triplet Margin Loss ($\text{margin} = 0.4$) and $0^\circ/180^\circ$ Test-Time Augmentation (TTA).
 
+> **Note on Throat + Belly Pipeline (`01-02_Throat_Belly_pipeline/`)**:  
+> The `01-02_Throat_Belly_pipeline/` directory is an end-to-end unified stage executing YOLOv8 detection, SAM 2 segmentation, and bilateral standardization directly on the full ventral region (Throat + Belly combined) rather than the throat alone. This is done so to compare whether throat results better output than throat + belly.
+
+### Extension: Anatomical comparison on Throat and Throat + Belly  
+* **Bi-Model Consensus and Deep Metric Learning performances on throat and throat + belly.
+
 ---
 
 ## 📊 Empirical Benchmarks
 
-### 1. Throat-Only Recapture Identification Benchmark (100 Images, 40 Identities, 60 True Recaptures)
+### 1. SAM 2 Semantic Mask Segmentation Benchmark ($N=70$ Polygons)
 
-| Model Architecture | Target Anatomy | Top-1 Recapture | Top-3 Recapture | Top-5 Recapture | Top-10 Recapture | Top-20 Recapture | Mean Rank |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Siamese ConvNeXt-Tiny (RGB)** | **Throat Only** | **71.67% (43/60)** | **90.00% (54/60)** | **91.67% (55/60)** | **96.67% (58/60)** | **98.33% (59/60)** | **1.97** |
-| **WildID Baseline** | Throat Only | **71.67% (43/60)** | 80.00% (48/60) | 83.33% (50/60) | 91.67% (55/60) | 96.67% (58/60) | 2.53 |
-| **Siamese ConvNeXt-Tiny (Gray)**| Throat Only | 68.33% (41/60) | 75.00% (45/60) | 86.67% (52/60) | 91.67% (55/60) | 96.67% (58/60) | 2.50 |
-| **Bi-Model Consensus (SIFT+AKAZE)** | Throat Only | 41.67% (25/60) | 51.67% (31/60) | 61.67% (37/60) | 71.67% (43/60) | 85.00% (51/60) | 4.78 |
+The automated throat mask extraction pipeline was evaluated against $N=70$ human ground-truth LabelMe polygonal annotations from diverse field survey sessions.
+
+| Metric | Measured Value | Standard Deviation | Description |
+| :--- | :---: | :---: | :--- |
+| **YOLOv8n Throat Detection Rate** | **100.00% (70/70)** | — | Perfect box localization across lighting & poses |
+| **Mean Mask IoU (Jaccard Index)** | **73.14%** | $\pm 6.71\%$ | Spatial overlap with human anatomical polygon |
+| **Median Mask IoU** | **74.06%** | — | Robust median spatial overlap |
+| **Mean Dice Coefficient ($F_1$)** | **84.30%** | $\pm 4.71\%$ | Harmonic mean of precision and recall |
+| **Mean Border Precision** | **97.17%** | $\pm 2.45\%$ | Strict exclusion of substrate/background pixels |
+| **Mean Coverage / Recall** | **75.07%** | $\pm 8.12\%$ | Percentage of manual ground-truth patch captured |
+| **Mean SAM 2 Mask Solidity** | **0.9883** | $\pm 0.009$ | High shape compactness with smooth Chaikin borders |
 
 ---
 
-### 2. Strict Unique Rejection Benchmark (60 Unique Individuals — False Merge Prevention)
+### 2. Photometric Representation Ablation: RGB (LAB CLAHE) vs. Grayscale
+
+| Metric | Siamese ConvNeXt (RGB) | Siamese ConvNeXt (Grayscale) | Performance Delta ($\Delta_{\text{RGB}}$) |
+| :--- | :---: | :---: | :---: |
+| **Top-1 Recapture Accuracy** | **71.67% (43/60)** | 68.33% (41/60) | **+3.34%** |
+| **Top-3 Recapture Accuracy** | **90.00% (54/60)** | 75.00% (45/60) | **+15.00%** |
+| **Top-5 Recapture Accuracy** | **91.67% (55/60)** | 86.67% (52/60) | **+5.00%** |
+| **Top-10 Recapture Accuracy** | **96.67% (58/60)** | 91.67% (55/60) | **+5.00%** |
+| **Top-20 Recapture Accuracy** | **98.33% (59/60)** | 96.67% (58/60) | **+1.66%** |
+| **Mean Recapture Rank** | **1.97** | 2.50 | **-0.53** *(Better)* |
+| **Mean Average Precision (mAP)** | **78.37%** | 74.85% | **+3.52%** |
+| **Unique Toad Rejection Specificity (TNR)** | **80.00% (48/60)** | 73.33% (44/60) | **+6.67%** |
+| **False Merge Rate (FAR)** | **20.00% (12/60)** | 26.67% (16/60) | **-6.67%** *(Lower)* |
+
+---
+
+### 3. Throat-Only Recapture Identification Benchmark (100 Images, 40 Identities, 60 True Recaptures)
+
+| Model Architecture | Target Anatomy | Top-1 Recapture | Top-3 Recapture | Top-5 Recapture | Top-10 Recapture | Top-20 Recapture | Mean Rank | mAP (%) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Siamese ConvNeXt-Tiny (RGB)** | **Throat Only** | **71.67% (43/60)** | **90.00% (54/60)** | **91.67% (55/60)** | **96.67% (58/60)** | **98.33% (59/60)** | **1.97** | **78.37%** |
+| **WildID Baseline** | Throat Only | **71.67% (43/60)** | 80.00% (48/60) | 83.33% (50/60) | 91.67% (55/60) | 96.67% (58/60) | 2.53 | 71.67% |
+| **Siamese ConvNeXt-Tiny (Gray)**| Throat Only | 68.33% (41/60) | 75.00% (45/60) | 86.67% (52/60) | 91.67% (55/60) | 96.67% (58/60) | 2.50 | 74.85% |
+| **Bi-Model Consensus (SIFT+AKAZE)** | Throat Only | 41.67% (25/60) | 51.67% (31/60) | 61.67% (37/60) | 71.67% (43/60) | 85.00% (51/60) | 4.78 | 45.93% |
+
+---
+
+### 4. Strict Unique Rejection Benchmark (60 Unique Individuals — False Merge Prevention)
 
 | Model Architecture | Target Anatomy | Operating Threshold | Specificity (TNR %) | False Merge Rate (FAR %) | Max Impostor ($S_{\max}$) | Safe Zero-FP Cutoff |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Bi-Model Consensus** | **Throat Only** | $T^* = 0.060$ | **100.00% (60/60)** | **0.00% (0/60)** | **0.0578** | $T^*_{\text{safe}} \ge 0.058$ |
 | **Bi-Model Consensus** | **Throat + Belly** | $T^* = 0.060$ | **96.67% (58/60)** | **3.33% (2/60)** | **0.1341** | $T^*_{\text{safe}} \ge 0.135$ |
 | **Siamese ConvNeXt-Tiny (RGB)** | Throat Only | $\tau = 0.700$ | 80.00% (48/60) | 20.00% (12/60) | 0.8792 | $\tau_{\text{safe}} \ge 0.880$ |
-| **Siamese ConvNeXt-Tiny (Gray)**| Throat Only | $\tau = 0.700$ | 73.33% (44/60) | 26.67% (16/60) | 0.8180 | $\tau_{\text{safe}} \ge 0.818$ |
+| **Siamese ConvNeXt-Tiny (Gray)**| Throat Only | $\tau = 0.700$ | 73.33% (44/60) | 26.67% (16/60) | 0.8174 | $\tau_{\text{safe}} \ge 0.818$ |
+| **Siamese ConvNeXt-Tiny (RGB)** | Throat + Belly | $\tau = 0.700$ | 66.67% (40/60) | 33.33% (20/60) | 0.9287 | $\tau_{\text{safe}} \ge 0.930$ |
 
 ---
 
-### 3. Anatomical Factorial Comparison: Throat Alone vs. Throat + Belly ($2 \times 2$ Analysis)
+### 5. Anatomical Factorial Comparison: Throat Alone vs. Throat + Belly ($2 \times 2$ Analysis)
 
 A central ecological question is whether survey photographs should isolate the subgular throat or capture the entire ventral surface (throat + belly combined).
 
@@ -182,14 +220,6 @@ rcs_pipeline/
 
 ### 1. Environment Setup
 ```bash
-# Clone repository
-git clone https://github.com/Nyidon/RCS.git
-cd RCS
-
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
 # Install dependencies
 pip install torch torchvision timm ultralytics opencv-python numpy pandas matplotlib tqdm openpyxl faiss-cpu scikit-learn
 ```
@@ -225,6 +255,3 @@ python 03_2_Siamese_network/src/test_strict_unique_rejection.py --model both
 ```
 
 ---
-
-## ⚙️ Hardware Acceleration
-Optimized for Apple Silicon hardware acceleration via PyTorch `mps` (`device='mps'`), automatically falling back to CUDA GPUs or multi-core CPU threads.

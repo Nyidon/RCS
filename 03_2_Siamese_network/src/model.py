@@ -16,7 +16,6 @@ class ToadMetricEmbeddingNet(nn.Module):
         self.embedding_dim = embedding_dim
         self.backbone_name = backbone_name
         
-        # Load backbone without classification head
         try:
             self.backbone = timm.create_model(backbone_name, pretrained=pretrained, num_classes=0)
             in_features = self.backbone.num_features
@@ -93,8 +92,6 @@ class BatchHardCosineTripletLoss(nn.Module):
         self.margin = margin
 
     def forward(self, embeddings, labels):
-        # embeddings: [B, d] unit L2 normalized
-        # labels: [B] tensor of identity integers
         sim_mat = torch.mm(embeddings, embeddings.t())  # [B, B]
         B = embeddings.size(0)
 

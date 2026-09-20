@@ -1,13 +1,5 @@
-"""
-yolo_train.py (Throat + Belly Pipeline)
-=======================================
-Phase 1: Object detection & SAM 2 extraction for full ventral (Throat + Belly) patterns.
 
-1. Trains YOLOv8n detector on throat+belly bounding boxes.
-2. Prompts SAM 2 zero-shot foundation model with predicted boxes.
-3. Generates smoothed full ventral masks (chin to pelvis) with pure black backgrounds.
-4. Saves isolated crops to data/SAM2_Data/{train, val}/.
-"""
+# Phase 1: Object detection & SAM 2 extraction for full ventral (Throat + Belly) patterns.
 
 import os
 import cv2
@@ -52,9 +44,9 @@ def train_yolo_model(current_dir):
 
 
 def chaikin_smooth(points, iterations=3, closed=True):
-    """
-    Iteratively rounds off sharp polygon vertices into smooth, continuous organic curves.
-    """
+
+    # Iteratively rounds off sharp polygon vertices into smooth, continuous organic curves.
+
     pts = np.array(points, dtype=np.float32).reshape(-1, 2)
     for _ in range(iterations):
         new_pts = []

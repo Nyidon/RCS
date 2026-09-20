@@ -34,18 +34,15 @@ def train_yolo_model(current_dir):
     print(f"Box mAP50-95:            {metrics.box.map:.4f}")
     print("==================================================")
 
-    # Extract the dynamic save directory from the results(when exist=False)
     save_dir = results.save_dir
 
-    # YOLO by default saves the file in runs/detect + path mentioned folder
     weights_path = os.path.join(save_dir, 'weights', 'best.pt')
     return weights_path
 
 def chaikin_smooth(points, iterations=3, closed=True):
-    """
-    Chaikin's corner-cutting algorithm:
-    Iteratively rounds off sharp polygon vertices into smooth, continuous curves.
-    """
+
+    # Chaikin's corner-cutting algorithm: Iteratively rounds off sharp polygon vertices into smooth, continuous curves.
+
     pts = np.array(points, dtype=np.float32).reshape(-1, 2)
     for _ in range(iterations):
         new_pts = []
@@ -61,18 +58,7 @@ def chaikin_smooth(points, iterations=3, closed=True):
 
 
 def create_smooth_triangular_mask(raw_contour, img_shape, inset_ratio=0.025, approx_eps=0.015, chaikin_iters=3):
-    """
-    Transforms raw SAM 2 contour into a smooth triangular/shield shape with rounded vertices,
-    preserving a subtle frame of the toad's natural black throat border while eliminating
-    external background/container artifacts.
 
-    1. Renders raw SAM 2 mask and calculates bounding dimensions.
-    2. Applies a mild adaptive inset (inset_ratio ~2.5%) to trim background noise/reflections
-       while retaining a slim, natural black anatomical border framing the entire yellow throat.
-    3. Extracts the simplified polygon and convex hull envelope to form a clean triangular geometry.
-    4. Applies Chaikin's corner-cutting algorithm to smoothly round all triangle vertices into continuous C1 curves.
-    5. Applies elliptical morphology & anti-aliased Gaussian feathering for a pure black background.
-    """
     # 1. Base mask from raw SAM 2 contour
     raw_mask = np.zeros(img_shape[:2], dtype=np.uint8)
     cv2.drawContours(raw_mask, [raw_contour], -1, 255, cv2.FILLED)
@@ -125,27 +111,20 @@ def generate_sam2_crops(current_dir, weights_path):
 
     yolo_model = YOLO(weights_path)
     sam_model = SAM('sam2_t.pt')
-
-    # Step up one level from 'src' to the main project folder
     project_root = os.path.dirname(current_dir)
 
     base_input = os.path.join(project_root, 'data')
     base_output = os.path.join(project_root, 'data', 'SAM2_Data')
 
     splits = ['train', 'val']
-    # Loop through directory
     for split in splits:
         input_folder = os.path.join(base_input, split)
         output_folder = os.path.join(base_output, split)
         os.makedirs(output_folder, exist_ok=True)
-
-        # Wipe out old crops before making new ones
         for f in os.listdir(output_folder):
             file_path = os.path.join(output_folder, f)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-
-        # Check if it actually finds the photos
         image_files = [
             f for f in os.listdir(input_folder)
             if f.lower().endswith(('.png', '.jpg', '.jpeg'))

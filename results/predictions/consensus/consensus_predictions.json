@@ -2,7 +2,7 @@
   "model": "BiModel_Consensus_AKAZE_SIFT",
   "total_queries": 100,
   "top_k": 20,
-  "runtime_seconds": 46.530559062957764,
+  "runtime_seconds": 48.610116958618164,
   "predictions": {
     "Aulbachtal_2025_Tag_02_IMG_20250501_112911.jpg": [],
     "Aulbachtal_2025_Tag_02_IMG_20250501_133055.jpg": [

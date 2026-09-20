@@ -21,7 +21,6 @@ plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Helvetica']
 plt.rcParams['axes.edgecolor'] = '#cbd5e1'
 plt.rcParams['axes.linewidth'] = 1.0
 
-# Add module paths
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent
 consensus_src = project_root / "03_1_Bi_model_consensus" / "src"
@@ -48,7 +47,6 @@ except ImportError:
 
 
 def load_unique_toad_images(data_dir: Path):
-    """Loads and sorts valid unique toad images from directory."""
     valid_exts = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp')
     files = sorted([
         unicodedata.normalize('NFC', f)
@@ -60,7 +58,6 @@ def load_unique_toad_images(data_dir: Path):
 
 
 def compute_siamese_similarity_matrix(paths, siamese_root: Path, mode: str = "rgb", checkpoint_path: Path = None):
-    """Extracts Siamese embeddings and computes full NxN cosine similarity matrix."""
     print(f"⚡ Computing Siamese Network (ConvNeXt-Tiny [{mode.upper()}]) embeddings for unique toads...")
     t0 = time.time()
     if checkpoint_path is None:
@@ -91,7 +88,7 @@ def compute_siamese_similarity_matrix(paths, siamese_root: Path, mode: str = "rg
 
 
 def compute_consensus_similarity_matrix(paths):
-    """Computes full NxN Bi-Model Consensus (AKAZE + SIFT) ratio matrix."""
+
     print("⚡ Computing Bi-Model Consensus (AKAZE + SIFT) pairwise matrices for unique toads...")
     t0 = time.time()
     engine = BiModelConsensusEngine(akaze_weight=0.55, sift_weight=0.45, threshold_t_star=0.080)
@@ -247,7 +244,7 @@ def evaluate_pure_unique_metrics(sim_matrix, files, model_name, default_threshol
 
 
 def plot_pure_unique_benchmark(results_dict, output_path):
-    """Generates 3-panel publication figure visualizing the 5 Pure-Unique Metrics."""
+
     fig = plt.figure(figsize=(18, 5.5), dpi=300)
     gs = fig.add_gridspec(1, 3, width_ratios=[1.1, 1.0, 1.1])
     ax1 = fig.add_subplot(gs[0])
@@ -268,7 +265,7 @@ def plot_pure_unique_benchmark(results_dict, output_path):
     }
 
     # -------------------------------------------------------------------------
-    # Panel A: Metric 3 - Discovered Clusters vs Image Index
+    # Panel A: Discovered Clusters vs Image Index
     # -------------------------------------------------------------------------
     first_res = list(results_dict.values())[0]
     N = first_res["total_unique_toads"]
@@ -295,7 +292,7 @@ def plot_pure_unique_benchmark(results_dict, output_path):
     ax1.legend(loc="upper left", frameon=True, facecolor="white", framealpha=0.9, fontsize=8.5)
 
     # -------------------------------------------------------------------------
-    # Panel B: Metric 4 - Max Impostor Score Boxplot Distribution
+    # Panel B: Max Impostor Score Boxplot Distribution
     # -------------------------------------------------------------------------
     score_data = []
     labels = []
@@ -325,7 +322,7 @@ def plot_pure_unique_benchmark(results_dict, output_path):
     ax2.legend(loc="upper right", frameon=True, facecolor="white", framealpha=0.9, fontsize=8)
 
     # -------------------------------------------------------------------------
-    # Panel C: Metric 1 & 5 - Rejection Specificity (TNR %) vs Threshold
+    # Panel C: Rejection Specificity (TNR %) vs Threshold
     # -------------------------------------------------------------------------
     for name, res in results_dict.items():
         c = colors.get(name, "#64748b")

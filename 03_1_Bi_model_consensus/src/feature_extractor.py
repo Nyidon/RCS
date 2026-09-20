@@ -1,24 +1,8 @@
-import os
 import cv2
 import numpy as np
 from pathlib import Path
 
 class DualFeatureExtractor:
-    """
-    Dual Local Feature Extractor for Toad Ventral Melanophore Patterns.
-    
-    Model A: SIFT (Scale-Invariant Feature Transform) / Primary Gradient Extractor
-      - 128-dimensional floating-point gradient orientation histograms.
-      - Tuned contrastThreshold to detect fine subgular stippling.
-      - L2 Euclidean distance matching with Lowe's ratio test (d1 < 0.80 * d2).
-      - RANSAC 2D Affine Geometric Spatial Inlier filtering.
-      
-    Model B: Secondary Binary Pattern Extractor (AKAZE or High-Density ORB)
-      - Fast explicit diffusion / binary intensity tests.
-      - Hamming distance matching with Lowe's ratio test.
-      
-    Both models utilize self-similarity normalization: R_ij = S_ij / S_ii.
-    """
     
     def __init__(
         self,
@@ -75,7 +59,6 @@ class DualFeatureExtractor:
         self._cache_self_sim = {}
 
     def _get_inner_mask(self, gray_img):
-        """Erodes foreground mask to ignore artificial crop border edges."""
         _, mask = cv2.threshold(gray_img, 10, 255, cv2.THRESH_BINARY)
         k_size = self.min_border_dist * 2 + 1
         kernel = np.ones((k_size, k_size), np.uint8)
@@ -83,9 +66,7 @@ class DualFeatureExtractor:
         return inner_mask
 
     def extract_features(self, img_input, rotate_180=False):
-        """
-        Extracts both Primary (SIFT) and Secondary (AKAZE/ORB) features for an image.
-        """
+
         if isinstance(img_input, (str, Path)):
             path_str = str(img_input)
             cache_key = (path_str, rotate_180)
@@ -132,9 +113,7 @@ class DualFeatureExtractor:
         }
 
     def match_descriptors(self, descs1, descs2, model_type="sift"):
-        """
-        Computes 2-NN matching and applies Lowe's ratio test (d1 < tau * d2).
-        """
+
         if descs1 is None or descs2 is None:
             return 0, []
         if len(descs1) < 2 or len(descs2) < 2:
@@ -157,9 +136,7 @@ class DualFeatureExtractor:
         return len(good_matches), good_matches
 
     def filter_geometric_inliers(self, kpts1, kpts2, matches):
-        """
-        Evaluates 2D Affine Geometric Spatial Inliers via RANSAC.
-        """
+
         if len(matches) < 4:
             return len(matches), matches
         
@@ -179,9 +156,7 @@ class DualFeatureExtractor:
             return len(matches), matches
 
     def get_self_similarity(self, img_input):
-        """
-        Computes self-similarity score S_ii for normalization.
-        """
+
         if isinstance(img_input, (str, Path)):
             path_str = str(img_input)
             if path_str in self._cache_self_sim:
@@ -205,10 +180,7 @@ class DualFeatureExtractor:
         return res
 
     def compute_pair_similarity(self, img1, img2):
-        """
-        Computes Multi-Orientation Normalized Ratio Scores and RANSAC Inliers:
-            R_ij = Inliers_ij / S_ii
-        """
+
         f1_0 = self.extract_features(img1, rotate_180=False)
         f1_180 = self.extract_features(img1, rotate_180=True)
         f2_0 = self.extract_features(img2, rotate_180=False)

@@ -3,11 +3,9 @@ import json
 import random
 from pathlib import Path
 from PIL import Image
-import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms
 
-# Input resolution for ConvNeXt backbone
 TARGET_SIZE = (224, 224)
 
 
@@ -39,11 +37,7 @@ def get_default_transforms(is_train=True):
 
 
 def load_clusters_from_toad_id(toad_id_dir=None, exclude_test_images=None):
-    """
-    Loads identity clusters directly from 03_2_Siamese_network/data/train/rgb_toad_id
-    or from rgb_toad_id_manifest.json.
-    Maps each Toad_ID (M001..M100, S001..S150) to the list of absolute image filepaths.
-    """
+
     project_root = Path(__file__).resolve().parent.parent.parent
     if toad_id_dir is None:
         toad_id_dir = project_root / "03_2_Siamese_network" / "data" / "train" / "rgb_toad_id"
@@ -82,10 +76,7 @@ def load_clusters_from_toad_id(toad_id_dir=None, exclude_test_images=None):
 
 
 class ToadIdentityBatchDataset(Dataset):
-    """
-    Flat Dataset for Online Batch-Hard Metric Learning.
-    Returns (ImageTensor, IdentityIndex, ImagePath).
-    """
+
     def __init__(self, clusters, transform=None):
         self.transform = transform if transform is not None else get_default_transforms(is_train=True)
         self.samples = []
@@ -200,9 +191,7 @@ class ToadTripletDataset(Dataset):
 
 
 class ToadGalleryDataset(Dataset):
-    """
-    Gallery dataset for computing embeddings over the entire catalog.
-    """
+
     def __init__(self, image_paths, transform=None):
         self.image_paths = sorted(image_paths)
         self.transform = transform if transform is not None else get_default_transforms(is_train=False)

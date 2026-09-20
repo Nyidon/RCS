@@ -1,16 +1,9 @@
-import os
-import glob
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from feature_extractor import DualFeatureExtractor
 
 class PairwiseMatcher:
-    """
-    Computes pairwise directed and symmetrized Ratio Matrices (R_ij = S_ij / S_ii)
-    with multi-threaded acceleration.
-    """
-    
+
     def __init__(self, extractor=None, max_workers=8):
         if extractor is None:
             self.extractor = DualFeatureExtractor()
@@ -19,10 +12,7 @@ class PairwiseMatcher:
         self.max_workers = max_workers
 
     def precompute_batch_features(self, image_paths, progress_callback=None):
-        """
-        Pre-extracts features for all images at both 0° and 180° orientations.
-        Computes self-similarity S_ii for normalization.
-        """
+
         feats_0 = {}
         feats_180 = {}
         self_sims = {}
@@ -44,9 +34,7 @@ class PairwiseMatcher:
         return feats_0, feats_180, self_sims
 
     def compute_all_pairwise_ratios(self, image_paths, progress_callback=None):
-        """
-        Computes complete N x N Ratio Matrices for SIFT and Secondary model.
-        """
+
         paths = sorted([str(p) for p in image_paths])
         N = len(paths)
         if N == 0:

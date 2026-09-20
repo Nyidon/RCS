@@ -25,16 +25,6 @@ def compute_symmetry_iou(mask_patch):
 
 
 def score_chin_north(crop_mask):
-    """
-    Calculates a multi-feature anatomical morphology score to determine whether
-    the chin is oriented North (+ score) or South (- score).
-
-    Combines 4 invariant biological cues:
-    1. Longitudinal Width Taper: Chin apex (top 25%) is narrower than chest base (bottom 25%).
-    2. Top Corner Void Margins: Parabolic chin arch leaves large empty triangular top corners.
-    3. Bilateral Area Mass: Belly mass is distributed towards the lower torso.
-    4. Vertical Moments: Evaluates center of mass relative to geometric center.
-    """
     h, w = crop_mask.shape[:2]
     if h < 5 or w < 5:
         return 0.0
@@ -68,10 +58,6 @@ def score_chin_north(crop_mask):
 
 
 def align_chin_to_yaxis(img):
-    """
-    Aligns the throat patch vertically along the Y-axis and ensures
-    the chin points strictly North (upwards).
-    """
     if img is None:
         return None, 0, False
 
@@ -155,13 +141,7 @@ def align_chin_to_yaxis(img):
 
 
 def enhance_and_sharpen_gray(img_gray, mask, clip_limit=4.0, tile_grid_size=(8, 8)):
-    """
-    Enhances contrast and sharpens single-channel Grayscale images:
-    1. Edge-preserving bilateral filtering to suppress sensor noise without blurring spot edges.
-    2. Adaptive local contrast enhancement via CLAHE.
-    3. Multi-scale Unsharp Masking detail boost.
-    4. Pure black [0] background enforcement.
-    """
+
     # 1. Edge-preserving bilateral denoising
     denoised = cv2.bilateralFilter(img_gray, d=5, sigmaColor=40, sigmaSpace=40)
 
@@ -206,7 +186,6 @@ def preprocess_throat_gray(img, target_size=TARGET_SIZE, clip_limit=4.0):
 
 
 def process_dataset(input_dir, output_dir, target_size=TARGET_SIZE, clip_limit=4.0):
-    """Processes all images in input_dir and saves data grayscale images to output_dir."""
     input_path = Path(input_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

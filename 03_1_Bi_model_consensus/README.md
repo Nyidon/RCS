@@ -16,9 +16,7 @@
    Symmetrized conservative matrix:
    $$S_{ij}^{\text{sym}} = \min\left(R_{ij}^{\text{consensus}}, R_{ji}^{\text{consensus}}\right)$$
 3. **Top-20 Candidate Retrieval Engine**:
-   - **WildID Sequential Mode**: Replicates WildID's incremental matching protocol ($\min(i, 20)$ candidates from past encounters $0 \dots i-1$).
-   - **Dynamic Catalog Mode**: Compares queries directly against confirmed unique individual prototypes.
-   - **Global Batch Mode**: Explores full-batch bidirectional correspondences.
+   - **Strict Sequential WildID Protocol**: Replicates WildID's incremental field arrival protocol ($\min(i, 20)$ candidates chosen strictly from past encounters $0 \dots i-1$).
 4. **Interactive Side-by-Side Review UI (`app_consensus_ui.py`)**:
    - Side-by-side spot visualizer with live correspondence lines.
    - One-click confirmation buttons (`[✅ Confirm Match]` / `[🆕 Register New Individual]`).

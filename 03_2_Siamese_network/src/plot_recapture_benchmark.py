@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-plot_recapture_benchmark.py
-===========================
-Generates a refined 2-panel comparative figure evaluating Recapture Identification
-specifically across Anatomical Targets (Throat vs Throat+Belly) on Bi-Model Consensus
-and Siamese Deep Metric Learning Networks.
 
-Panels:
-  A: Cumulative Match Characteristic (CMC) Curves (Rank 1 to 20)
-  B: Mean Recapture Rank (Lower is Better)
-"""
 
 import os
 import json
@@ -18,10 +8,6 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-
-# -------------------------------------------------------------
-# Paths
-# -------------------------------------------------------------
 script_dir = Path(__file__).resolve().parent
 project_root = script_dir.parent.parent
 

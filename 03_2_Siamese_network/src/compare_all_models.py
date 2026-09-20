@@ -1,23 +1,7 @@
 #!/usr/bin/env python3
-"""
-Comprehensive Benchmark Comparison: Siamese Network vs Bi-Model Consensus vs WildID
-=====================================================================================
-Compares predictions from:
-  1. Pure Siamese Network (ConvNeXt-Tiny)
-  2. Bi-Model Consensus Engine (AKAZE + SIFT)
-  3. WildID Software Benchmark
-against the human-verified Ground-Truth Test Manifest (`data/test/test_manifest.json`).
 
-Generates:
-- Cumulative Matching Characteristic (CMC) curves (Top-1 to Top-20)
-- Benchmark summary metrics (Top-1, Top-3, Top-5, Top-10, Top-20, mAP)
-- Multi-panel publication-quality comparative plots
-- Multi-sheet Excel workbook and JSON evaluation manifest
+# Comprehensive Benchmark Comparison: Siamese Network vs Bi-Model Consensus vs WildID on throat alone
 
-Usage:
-  python 03_2_Siamese_network/src/compare_all_models.py
-  python 03_2_Siamese_network/src/compare_all_models.py --wildid_file 03_2_Siamese_network/data/test/wildID/confirmed-matches.txt
-"""
 
 import os
 import sys
@@ -37,7 +21,6 @@ plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Helvetica']
 plt.rcParams['axes.edgecolor'] = '#cbd5e1'
 plt.rcParams['axes.linewidth'] = 1.0
 
-# Add paths
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent
 sys.path.append(str(current_dir))
@@ -46,7 +29,6 @@ from run_test_inference import run_siamese_inference, run_consensus_inference, l
 
 
 def load_ground_truth(manifest_path: Path):
-    """Loads human-verified ground-truth manifest and maps images to toad IDs."""
     with open(manifest_path, 'r', encoding='utf-8') as f:
         manifest = json.load(f)
 
@@ -61,7 +43,6 @@ def load_ground_truth(manifest_path: Path):
 
 
 def load_wildid_results(wildid_file: Path):
-    """Parses WildID confirmed-matches.txt format."""
     wildid_map = {}
     if not wildid_file or not wildid_file.exists():
         return wildid_map
@@ -87,12 +68,7 @@ def load_wildid_results(wildid_file: Path):
 
 
 def evaluate_ranked_predictions(predictions, test_files, img_to_toad, model_name, top_k=20):
-    """Evaluates sequential prediction lists against ground-truth identities.
-    
-    Identifies:
-      - Initial Sightings (N=40): 1st occurrence of each toad (no prior positive in gallery 0...i-1)
-      - Recapture Events (N=60): Subsequent encounters where prior images of the same toad exist.
-    """
+
     total_queries = len(test_files)
     seen_toads = set()
     
@@ -203,7 +179,6 @@ def evaluate_ranked_predictions(predictions, test_files, img_to_toad, model_name
 
 
 def evaluate_wildid(wildid_map, test_files, img_to_toad):
-    """Evaluates WildID confirmed matches sequentially against ground truth."""
     if not wildid_map:
         return None
 
@@ -288,7 +263,6 @@ def evaluate_wildid(wildid_map, test_files, img_to_toad):
 
 
 def plot_comprehensive_benchmark(model_results, output_path):
-    """Generates single-panel CMC curve figure comparing throat models."""
     plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
     fig, ax = plt.subplots(figsize=(8.5, 6), dpi=300)
 

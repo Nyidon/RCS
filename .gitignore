@@ -28,6 +28,7 @@ throat_belly/
 # Project Context & Agent Internal Docs
 context.md
 GEMINI.md
+PIPELINE_EVALUATION_REPORT.md
 .agents/
 docs/
 

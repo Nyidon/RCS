@@ -163,43 +163,50 @@ def build_or_load_batch_embeddings(image_paths, mode="rgb", force_recompute=Fals
     return batch_data
 
 
-def get_top_20_within_batch_matches(query_image_path, batch_image_paths, mode="rgb", top_k=20):
+def get_top_20_within_batch_matches(query_image_path, batch_image_paths, mode="rgb", top_k=20, current_query_index=None):
     """
-    Pure Siamese Metric Retrieval:
-    Ranks batch candidates purely by embedding cosine similarity with Multi-Orientation TTA.
+    Pure Siamese Metric Retrieval (Strict Sequential WildID Protocol):
+    Query image i is compared exclusively against previously cataloged images (0 .. i-1).
     Returns Top-20 candidates.
     """
-    batch_data = build_or_load_batch_embeddings(batch_image_paths, mode=mode)
+    sorted_paths = sorted([str(p) for p in batch_image_paths])
+    batch_data = build_or_load_batch_embeddings(sorted_paths, mode=mode)
     batch_matrix_0 = batch_data["matrix_0"]
     batch_paths = batch_data["paths"]
     batch_filenames = batch_data["filenames"]
 
-    query_abs = os.path.abspath(str(query_image_path))
+    query_str = str(query_image_path)
+    if query_str not in batch_paths:
+        return []
+
+    q_idx = batch_paths.index(query_str)
+    effective_idx = current_query_index if current_query_index is not None else q_idx
+
+    # Strictly sequential: compare only against past images (0 .. effective_idx - 1)
+    if effective_idx == 0:
+        return []
+
+    past_matrix_0 = batch_matrix_0[:effective_idx]
     model = load_siamese_model(mode=mode)
     transform = get_default_transforms(is_train=False)
     q_emb0, q_emb180 = extract_siamese_embedding(query_image_path, model=model, transform=transform, return_tta=True)
 
-    # Multi-Orientation TTA Cosine Similarities
-    sims_0 = torch.mv(batch_matrix_0, q_emb0).numpy()
-    sims_180 = torch.mv(batch_matrix_0, q_emb180).numpy()
+    # Multi-Orientation TTA Cosine Similarities against past gallery
+    sims_0 = torch.mv(past_matrix_0, q_emb0).numpy()
+    sims_180 = torch.mv(past_matrix_0, q_emb180).numpy()
     similarities = np.maximum(sims_0, sims_180)
 
-    # Rank candidates strictly by Siamese similarity
-    ranked_indices = np.argsort(similarities)[::-1]
+    ranked_past_indices = np.argsort(similarities)[::-1][:top_k]
     candidates = []
 
-    for idx in ranked_indices:
+    for rank_idx, idx in enumerate(ranked_past_indices):
         cand_path = batch_paths[idx]
-        if os.path.abspath(cand_path) == query_abs:
-            continue
-
         raw_sim = float(similarities[idx])
-        # Rescale [-1, 1] to [0, 100%]
         sim_percentage = max(0.0, min(100.0, ((raw_sim + 1.0) / 2.0) * 100.0))
         cand_filename = batch_filenames[idx]
 
         candidates.append({
-            "rank": len(candidates) + 1,
+            "rank": rank_idx + 1,
             "filename": cand_filename,
             "path": cand_path,
             "cosine_similarity": raw_sim,
@@ -207,15 +214,13 @@ def get_top_20_within_batch_matches(query_image_path, batch_image_paths, mode="r
             "metadata": parse_filename_metadata(cand_filename)
         })
 
-        if len(candidates) == top_k:
-            break
-
     return candidates
 
 
 def precompute_all_batch_matches(batch_image_paths, mode="rgb", top_k=20, progress_callback=None):
     """
-    Precomputes Top-20 candidate rankings for ALL images in a batch using pure Siamese embeddings.
+    Precomputes Top-20 candidate rankings strictly sequentially for ALL images in a batch (WildID Protocol).
+    Query i is compared exclusively against images 0 ... i-1.
     Returns a dictionary: { query_filename: [cand1, cand2, ... cand20] }
     """
     sorted_paths = sorted([str(p) for p in batch_image_paths])
@@ -234,19 +239,25 @@ def precompute_all_batch_matches(batch_image_paths, mode="rgb", top_k=20, progre
     sim_0 = torch.mm(m0, m0.T).numpy()
     sim_180 = torch.mm(m180, m0.T).numpy()
     pairwise_sim = np.maximum(sim_0, sim_180)
-    np.fill_diagonal(pairwise_sim, -2.0)  # Exclude self
 
     results = {}
 
     for i in range(n_imgs):
         q_fname = filenames[i]
-        q_sims = pairwise_sim[i]
 
-        top_indices = np.argsort(q_sims)[::-1][:top_k]
+        if i == 0:
+            results[q_fname] = []
+            if progress_callback is not None:
+                progress_callback(1 / n_imgs)
+            continue
+
+        # Strict sequential past candidates 0 ... i-1
+        past_indices = list(range(i))
+        ranked_past = sorted(past_indices, key=lambda j: pairwise_sim[i, j], reverse=True)[:top_k]
+
         cands = []
-
-        for rank_idx, idx in enumerate(top_indices):
-            raw_sim = float(q_sims[idx])
+        for rank_idx, idx in enumerate(ranked_past):
+            raw_sim = float(pairwise_sim[i, idx])
             sim_pct = max(0.0, min(100.0, ((raw_sim + 1.0) / 2.0) * 100.0))
             c_fname = filenames[idx]
             c_path = paths[idx]
@@ -269,15 +280,15 @@ def precompute_all_batch_matches(batch_image_paths, mode="rgb", top_k=20, progre
 
 
 def get_top_10_within_batch_matches(query_image_path, batch_image_paths, mode="rgb", top_k=20, **kwargs):
-    """Backward compatibility alias returning Top-20 pure Siamese candidates."""
-    return get_top_20_within_batch_matches(query_image_path, batch_image_paths, mode=mode, top_k=top_k)
+    """Backward compatibility alias returning Top-20 sequential Siamese candidates."""
+    return get_top_20_within_batch_matches(query_image_path, batch_image_paths, mode=mode, top_k=top_k, **kwargs)
 
 
-def get_top_10_siamese_matches(query_image_path, gallery_dir, mode="rgb", exclude_self=True, top_k=20, **kwargs):
-    """Backward compatibility alias returning Top-20 pure Siamese candidates."""
+def get_top_10_siamese_matches(query_image_path, gallery_dir, mode="rgb", top_k=20, **kwargs):
+    """Backward compatibility alias returning Top-20 sequential Siamese candidates."""
     image_paths = []
     for split in ["train", "val", "test"]:
         split_dir = Path(gallery_dir) / split
         if split_dir.exists():
             image_paths.extend(glob.glob(str(split_dir / "*.jpg")) + glob.glob(str(split_dir / "*.jpeg")) + glob.glob(str(split_dir / "*.png")))
-    return get_top_20_within_batch_matches(query_image_path, image_paths, mode=mode, top_k=top_k)
+    return get_top_20_within_batch_matches(query_image_path, image_paths, mode=mode, top_k=top_k, **kwargs)

@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-"""
-Test Inference Runner: Siamese Network and Bi-Model Consensus
-=============================================================
-Runs inference on test images using the selected model and outputs standardized
-prediction rankings suitable for comparative benchmarking.
-
-Arguments:
-  --model {siamese, consensus, both} : Which model to run (default: both)
-  --data_dir                         : Path to flat test images folder
-  --output_dir                       : Output directory for prediction files
-  --top_k                            : Number of candidates to rank (default: 20)
-
-Usage:
-  python 03_2_Siamese_network/src/run_test_inference.py --model siamese
-  python 03_2_Siamese_network/src/run_test_inference.py --model consensus
-  python 03_2_Siamese_network/src/run_test_inference.py --model both
-"""
 
 import os
 import sys
@@ -28,7 +11,6 @@ import numpy as np
 import pandas as pd
 import torch
 
-# Add paths
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent
 consensus_src = project_root / "03_1_Bi_model_consensus" / "src"
@@ -55,7 +37,6 @@ except ImportError:
 
 
 def load_test_images(data_dir: Path):
-    """Loads and sorts valid test image paths."""
     valid_exts = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp')
     test_files = sorted([
         unicodedata.normalize('NFC', f)
@@ -67,14 +48,7 @@ def load_test_images(data_dir: Path):
 
 
 def run_siamese_inference(test_files, test_paths, siamese_root: Path, mode: str = "rgb", top_k: int = 20, checkpoint_path: Path = None):
-    """Computes pairwise embeddings and ranks Top-K candidates sequentially using pure Siamese ConvNeXt.
-    
-    Sequential Protocol:
-      - Query i=0 (Image 1): 0 past candidates -> []
-      - Query i=1 (Image 2): 1 candidate (Image 1)
-      - Query i=2 (Image 3): 2 candidates (Images 1, 2) sorted descending by score
-      - Query i: compared strictly against images 0 ... i-1, sorted descending, keeping Top <= min(i, top_k).
-    """
+
     print(f"⚡ Running Siamese Network (ConvNeXt-Tiny [{mode.upper()}]) inference...")
     t0 = time.time()
     if checkpoint_path is None:
@@ -157,14 +131,6 @@ def run_siamese_inference(test_files, test_paths, siamese_root: Path, mode: str 
 
 
 def run_consensus_inference(test_files, test_paths, top_k: int = 20):
-    """Computes pairwise ratio-normalized matching and ranks Top-K candidates sequentially using AKAZE+SIFT.
-    
-    Sequential Protocol:
-      - Query i=0 (Image 1): 0 past candidates -> []
-      - Query i=1 (Image 2): 1 candidate (Image 1)
-      - Query i=2 (Image 3): 2 candidates (Images 1, 2) sorted descending by score
-      - Query i: compared strictly against images 0 ... i-1, sorted descending, keeping Top <= min(i, top_k).
-    """
     print("⚡ Running Bi-Model Consensus Engine (AKAZE + SIFT) inference...")
     t0 = time.time()
     engine = BiModelConsensusEngine(akaze_weight=0.55, sift_weight=0.45, threshold_t_star=0.080)

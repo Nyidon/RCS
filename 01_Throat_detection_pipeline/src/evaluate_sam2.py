@@ -4,20 +4,6 @@ evaluate_sam2.py
 Evaluates SAM 2 zero-shot throat segmentation quality by measuring exact pixel-level
 region of overlap against human manual polygon annotations (LabelMe JSON).
 
-Strict Requirement:
-- Expects LabelMe JSON files with shape_type == 'polygon'.
-
-Metrics Computed:
-1. Mask IoU (Jaccard Index): Area(Intersection) / Area(Union)
-2. Dice Similarity (F1 Score): 2 * Area(Intersection) / (Area(Manual) + Area(SAM2))
-3. Coverage / Recall: Area(Intersection) / Area(Manual Polygon)
-4. Precision / Purity: Area(Intersection) / Area(SAM 2 Mask)
-5. Geometric Solidity & Boundary Smoothness
-
-Outputs:
-- Benchmark summary printed to console
-- Detailed per-image CSV report
-- 4-panel visual overlap maps (Green = Manual Miss, Red = SAM 2 Spill, Yellow = Overlap)
 """
 
 import os
@@ -29,16 +15,11 @@ import numpy as np
 import pandas as pd
 from ultralytics import YOLO, SAM
 
+script_dir = Path(__file__).resolve().parent
+project_root = script_dir.parent.parent
+
 
 def parse_strict_polygon(json_path):
-    """
-    Parses a LabelMe JSON annotation and strictly extracts polygon points.
-    Returns:
-        pts: np.ndarray of shape (N, 2) or None if no polygon found
-        h: Image height
-        w: Image width
-        img_name: Image filename referenced in JSON
-    """
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
@@ -65,9 +46,6 @@ def parse_strict_polygon(json_path):
 
 
 def chaikin_smooth(points, iterations=3, closed=True):
-    """
-    Applies Chaikin corner-cutting algorithm to polygon contours.
-    """
     pts = np.array(points, dtype=np.float32).reshape(-1, 2)
     for _ in range(iterations):
         new_pts = []
@@ -83,9 +61,6 @@ def chaikin_smooth(points, iterations=3, closed=True):
 
 
 def create_smooth_triangular_mask(raw_contour, img_shape, inset_ratio=0.025, approx_eps=0.015, chaikin_iters=3):
-    """
-    Applies standard Phase 1 smoothing: convex hull decimation + Chaikin + morphology.
-    """
     raw_mask = np.zeros(img_shape[:2], dtype=np.uint8)
     cv2.drawContours(raw_mask, [raw_contour], -1, 255, cv2.FILLED)
 
@@ -124,9 +99,7 @@ def create_smooth_triangular_mask(raw_contour, img_shape, inset_ratio=0.025, app
 
 
 def compute_polygon_overlap_metrics(manual_mask, auto_mask):
-    """
-    Computes exact pixel-level overlap metrics between manual polygon and automated SAM 2 mask.
-    """
+
     m_bool = manual_mask > 0
     a_bool = auto_mask > 0
 
@@ -165,47 +138,56 @@ def compute_polygon_overlap_metrics(manual_mask, auto_mask):
 
 def render_4panel_visualization(img, manual_mask, auto_mask, file_stem, metrics, output_dir):
     """
-    Renders and saves a 4-panel visual comparison:
-    1. Raw Image
-    2. Human Manual Polygon (Green outline + fill)
-    3. Automated SAM 2 Mask (Red outline + fill)
-    4. Overlap Map (Green = Missed, Red = Spill, Yellow = Exact Match)
+    Renders high-contrast 4-panel comparison montage:
+      1. Original Input Image
+      2. Human Ground Truth Manual Polygon (Green)
+      3. Automated YOLOv8 + SAM 2 Prediction (Blue/Cyan)
+      4. Overlap Diagnostic Composite (Yellow: Match, Red: Spill, Green: Missed)
     """
     os.makedirs(output_dir, exist_ok=True)
+    h, w = img.shape[:2]
 
-    # Panel 2: Manual Polygon overlay
+    # Panel 1: Original Image with Header
+    panel_orig = img.copy()
+    cv2.rectangle(panel_orig, (0, 0), (w, 36), (20, 24, 33), -1)
+    cv2.putText(panel_orig, "1. Original Survey Photograph", (12, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2, cv2.LINE_AA)
+
+    # Panel 2: Manual Polygon overlay (Emerald Green)
     panel_m = img.copy()
     overlay_m = np.zeros_like(img)
-    overlay_m[manual_mask > 0] = [0, 255, 0]
-    panel_m = cv2.addWeighted(panel_m, 0.7, overlay_m, 0.3, 0)
+    overlay_m[manual_mask > 0] = [16, 185, 129]  # Emerald Green
+    panel_m = cv2.addWeighted(panel_m, 0.65, overlay_m, 0.35, 0)
     cnts_m, _ = cv2.findContours(manual_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(panel_m, cnts_m, -1, (0, 255, 0), 2)
-    cv2.putText(panel_m, "Manual Human Polygon", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    cv2.drawContours(panel_m, cnts_m, -1, (16, 185, 129), 2, cv2.LINE_AA)
+    cv2.rectangle(panel_m, (0, 0), (w, 36), (20, 24, 33), -1)
+    cv2.putText(panel_m, "2. Ground Truth Human Polygon", (12, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (52, 211, 153), 2, cv2.LINE_AA)
 
-    # Panel 3: SAM 2 Auto overlay
+    # Panel 3: SAM 2 Auto overlay (Royal Blue / Cyan)
     panel_a = img.copy()
     overlay_a = np.zeros_like(img)
-    overlay_a[auto_mask > 0] = [0, 0, 255]
-    panel_a = cv2.addWeighted(panel_a, 0.7, overlay_a, 0.3, 0)
+    overlay_a[auto_mask > 0] = [235, 99, 37]  # Royal Blue (BGR)
+    panel_a = cv2.addWeighted(panel_a, 0.65, overlay_a, 0.35, 0)
     cnts_a, _ = cv2.findContours(auto_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(panel_a, cnts_a, -1, (0, 0, 255), 2)
-    cv2.putText(panel_a, "Auto YOLO + SAM 2", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+    cv2.drawContours(panel_a, cnts_a, -1, (235, 99, 37), 2, cv2.LINE_AA)
+    cv2.rectangle(panel_a, (0, 0), (w, 36), (20, 24, 33), -1)
+    cv2.putText(panel_a, "3. Auto YOLOv8 + SAM 2 Extraction", (12, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (244, 114, 182), 2, cv2.LINE_AA)
 
     # Panel 4: Color-coded Overlap Composite
-    panel_ov = (img.copy() * 0.4).astype(np.uint8)
+    panel_ov = (img.copy() * 0.35).astype(np.uint8)
     manual_only = np.logical_and(manual_mask > 0, auto_mask == 0)
     auto_only = np.logical_and(auto_mask > 0, manual_mask == 0)
     overlap = np.logical_and(manual_mask > 0, auto_mask > 0)
 
-    panel_ov[manual_only] = [0, 220, 0]     # Green = Missed by SAM 2
-    panel_ov[auto_only] = [0, 0, 255]       # Red = Spill outside polygon
-    panel_ov[overlap] = [0, 255, 255]       # Yellow = Exact Overlap
+    panel_ov[manual_only] = [0, 200, 0]      # Green = Undersegmented / Missed
+    panel_ov[auto_only] = [0, 0, 230]        # Red = Oversegmented / Spill
+    panel_ov[overlap] = [0, 230, 255]        # Yellow = True Positive Overlap
 
-    title = f"Overlap (Yellow) | IoU: {metrics['mask_iou']*100:.1f}% | Recall: {metrics['recall']*100:.1f}%"
-    cv2.putText(panel_ov, title, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+    cv2.rectangle(panel_ov, (0, 0), (w, 36), (20, 24, 33), -1)
+    title = f"4. Overlap (Yellow) | IoU: {metrics['mask_iou']*100:.1f}% | Dice: {metrics['dice']*100:.1f}% | Prec: {metrics['precision']*100:.1f}%"
+    cv2.putText(panel_ov, title, (12, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Combine 2x2
-    top = np.hstack([img, panel_m])
+    # Combine 2x2 Montage
+    top = np.hstack([panel_orig, panel_m])
     bot = np.hstack([panel_a, panel_ov])
     composite = np.vstack([top, bot])
 
@@ -222,9 +204,6 @@ def render_4panel_visualization(img, manual_mask, auto_mask, file_stem, metrics,
 
 
 def run_polygon_evaluation(data_dir, weights_path, sam_weights_path, output_dir, max_viz=30):
-    """
-    Runs strict polygon overlap evaluation on the LabelMe_Test folder.
-    """
     print("\n" + "=" * 75)
     print("      STRICT MANUAL POLYGON VS. SAM 2 CROPPING EVALUATION BENCHMARK       ")
     print("=" * 75)
@@ -305,7 +284,7 @@ def run_polygon_evaluation(data_dir, weights_path, sam_weights_path, output_dir,
         box = list(map(int, res[0].boxes.xyxy[0].tolist()))
         x1, y1, x2, y2 = box
 
-        # 3. SAM 2 Zero-Shot Throat Segmentation
+        # 3. SAM 2 Throat Segmentation
         sam_res = sam_model.predict(source=img_path, bboxes=[x1, y1, x2, y2], device='mps', save=False, verbose=False)
         if sam_res[0].masks is None or len(sam_res[0].masks.xy) == 0:
             auto_mask = np.zeros((h, w), dtype=np.uint8)
@@ -366,27 +345,28 @@ def run_polygon_evaluation(data_dir, weights_path, sam_weights_path, output_dir,
 def plot_sam2_segmentation_performance(df, output_path):
     """
     Renders 2-panel publication figure:
-    Panel A: Mask IoU & Dice Similarity Distribution
-    Panel B: Segmentation Precision vs. Coverage Recall
+      Panel A: Mask IoU & Dice Similarity Distribution
+      Panel B: Segmentation Precision vs. Coverage Recall
     """
     import matplotlib.pyplot as plt
     plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6.5), dpi=300)
+    fig.suptitle("Phase 1: Zero-Shot SAM 2 Throat Segmentation vs. Manual Ground Truth", fontsize=15, fontweight="bold", y=0.98)
 
     # Panel A: Mask IoU & Dice Similarity Distribution
     iou_scores = df["mask_iou"] * 100
     dice_scores = df["dice"] * 100
 
     bins = np.linspace(45, 95, 21)
-    ax1.hist(iou_scores, bins=bins, color="#0284c7", alpha=0.8, edgecolor="black", linewidth=0.8, label=f"Mask IoU (Mean: {iou_scores.mean():.1f}%)")
-    ax1.hist(dice_scores, bins=bins, color="#10b981", alpha=0.7, edgecolor="black", linewidth=0.8, label=f"Dice F1 (Mean: {dice_scores.mean():.1f}%)")
+    ax1.hist(iou_scores, bins=bins, color="#0284c7", alpha=0.8, edgecolor="black", linewidth=0.8, label=f"Mask IoU (μ={iou_scores.mean():.1f}%)")
+    ax1.hist(dice_scores, bins=bins, color="#10b981", alpha=0.7, edgecolor="black", linewidth=0.8, label=f"Dice F1 (μ={dice_scores.mean():.1f}%)")
     ax1.axvline(iou_scores.mean(), color="#0369a1", linestyle="--", linewidth=2.0)
     ax1.axvline(dice_scores.mean(), color="#047857", linestyle="--", linewidth=2.0)
 
-    ax1.set_title("A: Mask IoU & Dice Similarity Distribution (N=70)", fontsize=13, fontweight="bold", pad=12)
+    ax1.set_title("A. Mask Overlap Distributions (N=70)", fontsize=12.5, fontweight="bold", pad=10)
     ax1.set_xlabel("Overlap Score (%)", fontsize=11, fontweight="600")
     ax1.set_ylabel("Image Count", fontsize=11, fontweight="600")
-    ax1.set_xlim(45, 95)
+    ax1.set_xlim(45, 98)
     ax1.legend(loc="upper left", frameon=True, facecolor="white", framealpha=0.95, fontsize=10)
     ax1.grid(True, linestyle="--", alpha=0.5)
 
@@ -395,20 +375,23 @@ def plot_sam2_segmentation_performance(df, output_path):
     prec = df["precision"] * 100
 
     ax2.scatter(rec, prec, color="#8b5cf6", edgecolor="#6d28d9", s=65, alpha=0.75, zorder=4)
-    ax2.axhline(prec.mean(), color="#ef4444", linestyle="--", linewidth=1.8, label=f"Mean Precision: {prec.mean():.2f}%")
-    ax2.axvline(rec.mean(), color="#3b82f6", linestyle="--", linewidth=1.8, label=f"Mean Recall: {rec.mean():.2f}%")
+    ax2.axhline(prec.mean(), color="#ef4444", linestyle="--", linewidth=1.8, label=f"Mean Precision: {prec.mean():.1f}%")
+    ax2.axvline(rec.mean(), color="#3b82f6", linestyle="--", linewidth=1.8, label=f"Mean Recall: {rec.mean():.1f}%")
 
-    ax2.set_title("B: Segmentation Precision vs. Coverage Recall", fontsize=13, fontweight="bold", pad=12)
+    ax2.set_title("B. Border Precision vs. Coverage Recall Trade-Off", fontsize=12.5, fontweight="bold", pad=10)
     ax2.set_xlabel("Coverage Recall (%) [Manual Throat Captured]", fontsize=11, fontweight="600")
-    ax2.set_ylabel("Mask Precision (%) [Border Cleanliness]", fontsize=11, fontweight="600")
-    ax2.set_ylim(75, 101.5)
+    ax2.set_ylabel("Border Precision (%) [Border Cleanliness]", fontsize=11, fontweight="600")
+    ax2.set_ylim(75, 102)
     ax2.legend(loc="lower left", frameon=True, facecolor="white", framealpha=0.95, fontsize=10)
     ax2.grid(True, linestyle="--", alpha=0.5)
 
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.02, 1, 0.95])
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
+
+
+if __name__ == "__main__":
     project_root = script_dir.parent.parent
 
     parser = argparse.ArgumentParser(description="Evaluate SAM 2 Zero-Shot Throat Segmentation Overlap against Manual Polygons")
