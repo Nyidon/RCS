@@ -5,7 +5,7 @@
 [![Ultralytics](https://img.shields.io/badge/YOLOv8%20%2F%20SAM2-Computer%20Vision-green.svg)](https://docs.ultralytics.com/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-An automated computer vision and deep biometric metric learning framework for individual amphibian re-identification (*Bufo bufo* / *Bombina variegata*) in ecological Capture-Mark-Recapture (CMR / RCS) surveys. The system identifies individual toads across temporal field survey sessions using the natural, unique pigmentation spot patterns located on their subgular throat and ventral skin regions.
+An automated computer vision and deep biometric metric learning framework for individual amphibian re-identification (*Bufo bufo* / *Bombina variegata*) in ecological Capture-Mark-Recapture (CMR / RCS) surveys. The system identifies individual toads across temporal field survey sessions using the natural, unique pigmentation spot patterns located on their subgular throat and full ventral skin regions.
 
 ---
 
@@ -24,7 +24,7 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
                            │
                            ▼
 ┌────────────────────────────────────────────────────────┐
-│  Phase 2: Standardisation & Enhancement                │
+│  Phase 2: Geometric & Photometric Standardisation      │
 │  • Multi-Scale Bilateral Symmetry Sweep (0° to 180°)   │
 │  • 4-Feature Anatomical Orientation Scorer (Strict N)  │
 │  • LAB CLAHE Lightness enhancement & Unsharp Masking   │
@@ -47,8 +47,7 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 │         Automated Evaluation & Benchmarks              │
 │  1. Recapture Identification (100 Images, 40 IDs)      │
 │  2. False Merge Prevention (60 Unique Individuals)     │
-│  3. Multi-Model Comparison (Siamese vs. Bi-Model vs.   │
-│     WildID Baseline)                                   │
+│  3. Anatomical Comparison: Throat vs. Throat + Belly   │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -65,6 +64,9 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 * **4-Feature Anatomical Orientation Scorer**: Eliminates $180^\circ$ upside-down ambiguity using longitudinal width gradient, corner voids, area mass distribution, and center-of-mass moments.
 * **Photometric Enhancement**: LAB color-space bilateral filtering, CLAHE ($L$-channel), and unsharp detail enhancement to highlight subtle carotenoid pigments and melanin spots against specular glare.
 
+> **Note on Throat + Belly Pipeline (`01-02_Throat_Belly_pipeline/`)**:  
+> The `01-02_Throat_Belly_pipeline/` directory is an end-to-end unified stage executing YOLOv8 detection, SAM 2 segmentation, and bilateral standardization directly on the full ventral region (Throat + Belly combined) rather than the throat alone.
+
 ### Phase 3.1: Bi-Model Deterministic Consensus (`03_1_Bi_model_consensus/`)
 * **Complementary Descriptors**: Fuses **SIFT** (128-d gradient histograms) and **AKAZE** (binary MLDB) with boundary mask erosion (13 px).
 * **Spatial Verification**: 2-NN Lowe's Ratio Test ($\tau = 0.80$) and 2D Affine RANSAC geometric consensus filtering.
@@ -78,14 +80,13 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 
 ## 📊 Empirical Benchmarks
 
-### 1. Recapture Identification Benchmark (100 Images, 40 Identities, 60 True Recaptures)
+### 1. Throat-Only Recapture Identification Benchmark (100 Images, 40 Identities, 60 True Recaptures)
 
 | Model Architecture | Target Anatomy | Top-1 Recapture | Top-3 Recapture | Top-5 Recapture | Top-10 Recapture | Top-20 Recapture | Mean Rank |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Siamese ConvNeXt-Tiny (RGB)** | **Throat Only** | **71.67% (43/60)** | **90.00% (54/60)** | **91.67% (55/60)** | **96.67% (58/60)** | **98.33% (59/60)** | **1.97** |
 | **WildID Baseline** | Throat Only | **71.67% (43/60)** | 80.00% (48/60) | 83.33% (50/60) | 91.67% (55/60) | 96.67% (58/60) | 2.53 |
 | **Siamese ConvNeXt-Tiny (Gray)**| Throat Only | 68.33% (41/60) | 75.00% (45/60) | 86.67% (52/60) | 91.67% (55/60) | 96.67% (58/60) | 2.50 |
-| **Bi-Model Consensus (SIFT+AKAZE)** | **Throat + Belly** | **96.67% (58/60)** | **96.67% (58/60)** | **98.33% (59/60)** | **100.00% (60/60)**| **100.00% (60/60)**| **1.15** |
 | **Bi-Model Consensus (SIFT+AKAZE)** | Throat Only | 41.67% (25/60) | 51.67% (31/60) | 61.67% (37/60) | 71.67% (43/60) | 85.00% (51/60) | 4.78 |
 
 ---
@@ -101,11 +102,32 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 
 ---
 
+### 3. Anatomical Factorial Comparison: Throat Alone vs. Throat + Belly ($2 \times 2$ Analysis)
+
+A central ecological question is whether survey photographs should isolate the subgular throat or capture the entire ventral surface (throat + belly combined).
+
+| Model Family | Anatomical Target | Recapture Top-1 | Recapture Top-5 | Recapture Top-10 | Recapture Top-20 | Mean Rank | Rejection Specificity (TNR) | False Merge Rate (FAR) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Bi-Model Consensus** | **Throat Only** | 41.67% | 61.67% | 71.67% | 85.00% | 4.78 | **100.00%** | **0.00%** |
+| **Bi-Model Consensus** | **Throat + Belly** | **96.67%** | **98.33%** | **100.00%** | **100.00%** | **1.15** | **96.67%** | **3.33%** |
+| *Consensus Delta* | — | **+55.00%** | **+36.66%** | **+28.33%** | **+15.00%** | **-3.63** | *-3.33%* | *+3.33%* |
+| **Siamese ConvNeXt (RGB)** | **Throat Only** | **71.67%** | **91.67%** | **96.67%** | **98.33%** | **1.97** | **80.00%** | **20.00%** |
+| **Siamese ConvNeXt (RGB)** | **Throat + Belly** | 61.67% | 88.33% | **96.67%** | **98.33%** | 2.49 | 66.67% | 33.33% |
+| *Siamese Delta* | — | **-10.00%** | *-3.34%* | *0.00%* | *0.00%* | *+0.52* | *-13.33%* | *+13.33%* |
+
+#### 🔬 Why the Models Diverge Across Anatomical Targets:
+1. **Bi-Model Consensus leaps $+55.00\%$ on Throat + Belly ($96.67\%$ Top-1)**:  
+   Local feature matchers (SIFT/AKAZE) thrive on high spot counts. Expanding the patch across the belly provides abundant anchor points ($60\text{--}120$ keypoints vs. $15\text{--}25$ on throat only), enabling RANSAC to consistently establish geometric consensus even under slight camera tilt.
+2. **Siamese Network excels on Throat Only ($71.67\%$ Top-1 vs. $61.67\%$)**:  
+   Deep metric learning models resize inputs into fixed square dimensions ($256 \times 256$). Squishing elongated $1:2.5$ ventral rectangles blurs subtle micro-dots and introduces background aspect distortions, whereas compact triangular throat crops preserve pristine pixel resolution.
+
+---
+
 ## 📁 Repository Structure
 
 ```
 rcs_pipeline/
-├── 01_Throat_detection_pipeline/                   # Phase 1: Object detection & mask extraction
+├── 01_Throat_detection_pipeline/                   # Phase 1: Throat BBox detection & SAM 2 extraction
 │   ├── src/
 │   │   ├── dataset.yaml                            # YOLO dataset configuration
 │   │   ├── yolo_train.py                           # YOLOv8n training & SAM 2 crop generation
@@ -114,7 +136,15 @@ rcs_pipeline/
 │       ├── convert_to_txt.py                       # LabelMe JSON -> YOLO TXT annotation converter
 │       └── split_data.py                           # Survey dataset flattener & train/val splitter
 │
-├── 02_Throat_Preprocessing/                        # Phase 2: Pose standardisation & enhancement
+├── 01-02_Throat_Belly_pipeline/                    # Unified YOLO + SAM 2 + Preprocessing for Throat+Belly
+│   ├── src/
+│   │   ├── yolo_train.py                           # Ventral bounding box detector & SAM 2 segmenter
+│   │   └── preprocessing.py                        # Full ventral bilateral alignment & enhancement
+│   └── utils/
+│       ├── convert_to_txt.py                       # Annotation converter for ventral patches
+│       └── split_data.py                           # Ventral train/val splitter
+│
+├── 02_Throat_Preprocessing/                        # Phase 2: Throat pose standardisation & enhancement
 │   └── src/
 │       ├── preprocessing.py                        # Grayscale bilateral symmetry & CLAHE
 │       └── preprocessing_rgb.py                    # RGB LAB color-space CLAHE & unsharp boost
