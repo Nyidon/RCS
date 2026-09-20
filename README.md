@@ -1,6 +1,6 @@
 # RCS: Automated Toad Biometric Re-Identification Pipeline
 
-An automated computer vision and deep biometric metric learning framework for individual amphibian re-identification (*Bufo bufo* / *Bombina variegata*) in ecological Capture-Mark-Recapture (CMR / RCS) surveys. The system identifies individual toads across temporal field survey sessions using the natural, unique pigmentation spot patterns located on their subgular throat and full ventral skin regions.
+An automated computer vision and deep biometric metric learning framework for individual amphibian re-identification (*Bombina variegata*) in ecological Capture-Mark-Recapture (CMR / RCS) surveys. The system identifies individual toads across temporal field survey sessions using the natural, unique pigmentation spot patterns located on their subgular throat and full ventral skin regions.
 
 ---
 
@@ -14,7 +14,7 @@ Raw Survey Photos (Aulbachtal / Hochfläche)
 │  Phase 1: Detection & Segmentation (YOLOv8 + SAM 2)    │
 │  • YOLOv8n detector predicts anatomical bounding boxes │
 │  • SAM 2 extracts smooth triangular masks              │
-│  • Chaikin curve smoothing & 2.5% border inset        │
+│  • Chaikin curve smoothing & 2.5% border inset         │
 └──────────────────────────┬─────────────────────────────┘
                            │
                            ▼
